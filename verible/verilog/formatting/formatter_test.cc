@@ -20959,6 +20959,424 @@ TEST(FormatterEndToEndTest, ParamDeclarationAlignmentCommentBlockNoCrash) {
   }
 }
 
+TEST(FormatterEndToEndTest, NamedPortMinimumSpacingTest) {
+  const char input[] =
+      "module m;\n"
+      "backend u_backend (\n"
+      ".clk(clk),\n"
+      ".rst_n(rst_n),\n"
+      ".control_flow_blocked(control_flow_blocked),\n"
+      ".machine_software_interrupt(machine_software_interrupt),\n"
+      ".machine_timer_interrupt(machine_timer_interrupt)\n"
+      ");\n"
+      "endmodule\n";
+
+  {
+    // Default spacing 0:
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.named_port_alignment = AlignmentPolicy::kAlign;
+    style.named_port_indentation = IndentationStyle::kIndent;
+    style.named_port_minimum_spacing = 0;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+    EXPECT_EQ(stream.str(),
+              "module m;\n"
+              "  backend u_backend (\n"
+              "    .clk                       (clk),\n"
+              "    .rst_n                     (rst_n),\n"
+              "    .control_flow_blocked      (control_flow_blocked),\n"
+              "    .machine_software_interrupt(machine_software_interrupt),\n"
+              "    .machine_timer_interrupt   (machine_timer_interrupt)\n"
+              "  );\n"
+              "endmodule\n");
+  }
+  {
+    // Spacing 1:
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.named_port_alignment = AlignmentPolicy::kAlign;
+    style.named_port_indentation = IndentationStyle::kIndent;
+    style.named_port_minimum_spacing = 1;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+    EXPECT_EQ(stream.str(),
+              "module m;\n"
+              "  backend u_backend (\n"
+              "    .clk                        (clk),\n"
+              "    .rst_n                      (rst_n),\n"
+              "    .control_flow_blocked       (control_flow_blocked),\n"
+              "    .machine_software_interrupt (machine_software_interrupt),\n"
+              "    .machine_timer_interrupt    (machine_timer_interrupt)\n"
+              "  );\n"
+              "endmodule\n");
+  }
+  {
+    // Spacing 2:
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.named_port_alignment = AlignmentPolicy::kAlign;
+    style.named_port_indentation = IndentationStyle::kIndent;
+    style.named_port_minimum_spacing = 2;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+    EXPECT_EQ(stream.str(),
+              "module m;\n"
+              "  backend u_backend (\n"
+              "    .clk                         (clk),\n"
+              "    .rst_n                       (rst_n),\n"
+              "    .control_flow_blocked        (control_flow_blocked),\n"
+              "    .machine_software_interrupt  (machine_software_interrupt),\n"
+              "    .machine_timer_interrupt     (machine_timer_interrupt)\n"
+              "  );\n"
+              "endmodule\n");
+  }
+}
+
+TEST(FormatterEndToEndTest, NamedParameterMinimumSpacingTest) {
+  const char input[] =
+      "module m;\n"
+      "foo #(\n"
+      ".WIDTH(32),\n"
+      ".SOME_LONG_PARAMETER(VALUE)\n"
+      ") u_foo ();\n"
+      "endmodule\n";
+
+  {
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.named_parameter_alignment = AlignmentPolicy::kAlign;
+    style.named_parameter_indentation = IndentationStyle::kIndent;
+    style.named_parameter_minimum_spacing = 0;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+    EXPECT_EQ(stream.str(),
+              "module m;\n"
+              "  foo #(\n"
+              "    .WIDTH              (32),\n"
+              "    .SOME_LONG_PARAMETER(VALUE)\n"
+              "  ) u_foo ();\n"
+              "endmodule\n");
+  }
+  {
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.named_parameter_alignment = AlignmentPolicy::kAlign;
+    style.named_parameter_indentation = IndentationStyle::kIndent;
+    style.named_parameter_minimum_spacing = 1;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+    EXPECT_EQ(stream.str(),
+              "module m;\n"
+              "  foo #(\n"
+              "    .WIDTH               (32),\n"
+              "    .SOME_LONG_PARAMETER (VALUE)\n"
+              "  ) u_foo ();\n"
+              "endmodule\n");
+  }
+}
+
+TEST(FormatterEndToEndTest, PortDeclarationsGroupBoundaryTest) {
+  const char input[] =
+      "module core (\n"
+      "input logic clk,\n"
+      "input logic rst_n,\n"
+      "\n"
+      "// Instruction-memory interface\n"
+      "output logic imem_request_valid,\n"
+      "input logic imem_request_ready,\n"
+      "output bus_pkg::bus_request_t imem_request,\n"
+      "\n"
+      "// Data-memory request\n"
+      "output logic dmem_request_valid,\n"
+      "input logic dmem_request_ready,\n"
+      "output bus_pkg::bus_request_t dmem_request,\n"
+      "\n"
+      "// Retirement\n"
+      "output logic retire_valid,\n"
+      "input logic retire_ready,\n"
+      "output commit_pkg::rob_retire_t retire_entry,\n"
+      "output commit_pkg::architectural_retire_t architectural_retire_entry\n"
+      ");\n"
+      "endmodule\n";
+
+  {
+    // Default: blank-lines breaks groups
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.port_declarations_alignment = AlignmentPolicy::kAlign;
+    style.port_declarations_indentation = IndentationStyle::kIndent;
+    style.port_declarations_group_boundary =
+        AlignmentGroupBoundary::kBlankLines;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+    EXPECT_EQ(stream.str(),
+              "module core (\n"
+              "  input logic clk,\n"
+              "  input logic rst_n,\n"
+              "\n"
+              "  // Instruction-memory interface\n"
+              "  output logic                  imem_request_valid,\n"
+              "  input  logic                  imem_request_ready,\n"
+              "  output bus_pkg::bus_request_t imem_request,\n"
+              "\n"
+              "  // Data-memory request\n"
+              "  output logic                  dmem_request_valid,\n"
+              "  input  logic                  dmem_request_ready,\n"
+              "  output bus_pkg::bus_request_t dmem_request,\n"
+              "\n"
+              "  // Retirement\n"
+              "  output logic                              retire_valid,\n"
+              "  input  logic                              retire_ready,\n"
+              "  output commit_pkg::rob_retire_t           retire_entry,\n"
+              "  output commit_pkg::architectural_retire_t "
+              "architectural_retire_entry\n"
+              ");\n"
+              "endmodule\n");
+  }
+  {
+    // none: all ports in one alignment group
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.port_declarations_alignment = AlignmentPolicy::kAlign;
+    style.port_declarations_indentation = IndentationStyle::kIndent;
+    style.port_declarations_group_boundary = AlignmentGroupBoundary::kNone;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+    EXPECT_EQ(
+        stream.str(),
+        "module core (\n"
+        "  input  logic                              clk,\n"
+        "  input  logic                              rst_n,\n"
+        "\n"
+        "  // Instruction-memory interface\n"
+        "  output logic                              imem_request_valid,\n"
+        "  input  logic                              imem_request_ready,\n"
+        "  output bus_pkg::bus_request_t             imem_request,\n"
+        "\n"
+        "  // Data-memory request\n"
+        "  output logic                              dmem_request_valid,\n"
+        "  input  logic                              dmem_request_ready,\n"
+        "  output bus_pkg::bus_request_t             dmem_request,\n"
+        "\n"
+        "  // Retirement\n"
+        "  output logic                              retire_valid,\n"
+        "  input  logic                              retire_ready,\n"
+        "  output commit_pkg::rob_retire_t           retire_entry,\n"
+        "  output commit_pkg::architectural_retire_t "
+        "architectural_retire_entry\n"
+        ");\n"
+        "endmodule\n");
+  }
+}
+
+TEST(FormatterEndToEndTest, PortDeclarationsDimensionsTest) {
+  const char input[] =
+      "module foo (\n"
+      "input logic [SOURCE_COUNT-1:0] source_valid,\n"
+      "output logic [SOURCE_COUNT-1:0] source_ready,\n"
+      "input commit_pkg::rob_completion_t source_completion [SOURCE_COUNT]\n"
+      ");\n"
+      "endmodule\n";
+
+  {
+    // Default: separate
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.port_declarations_alignment = AlignmentPolicy::kAlign;
+    style.port_declarations_indentation = IndentationStyle::kIndent;
+    style.port_declarations_packed_dimensions =
+        PackedDimensionsPlacement::kSeparate;
+    style.port_declarations_unpacked_dimensions =
+        UnpackedDimensionsPlacement::kSeparate;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+    EXPECT_EQ(stream.str(),
+              "module foo (\n"
+              "  input  logic                        [SOURCE_COUNT-1:0] "
+              "source_valid,\n"
+              "  output logic                        [SOURCE_COUNT-1:0] "
+              "source_ready,\n"
+              "  input  commit_pkg::rob_completion_t                    "
+              "source_completion[SOURCE_COUNT]\n"
+              ");\n"
+              "endmodule\n");
+  }
+  {
+    // attach-to-type packed, attach-to-name unpacked
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.port_declarations_alignment = AlignmentPolicy::kAlign;
+    style.port_declarations_indentation = IndentationStyle::kIndent;
+    style.port_declarations_packed_dimensions =
+        PackedDimensionsPlacement::kAttachToType;
+    style.port_declarations_unpacked_dimensions =
+        UnpackedDimensionsPlacement::kAttachToName;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+    EXPECT_EQ(stream.str(),
+              "module foo (\n"
+              "  input  logic [SOURCE_COUNT-1:0]     source_valid,\n"
+              "  output logic [SOURCE_COUNT-1:0]     source_ready,\n"
+              "  input  commit_pkg::rob_completion_t "
+              "source_completion[SOURCE_COUNT]\n"
+              ");\n"
+              "endmodule\n");
+  }
+}
+
+TEST(FormatterEndToEndTest, ModuleNetVariableDimensionsTest) {
+  const char input_packed[] =
+      "module m;\n"
+      "logic [31:0] data;\n"
+      "some_really_long_type_t thing;\n"
+      "endmodule\n";
+
+  {
+    // Packed attach-to-type:
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.module_net_variable_alignment = AlignmentPolicy::kAlign;
+    style.module_net_variable_packed_dimensions =
+        PackedDimensionsPlacement::kAttachToType;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input_packed, "<filename>", style, stream));
+    EXPECT_EQ(stream.str(),
+              "module m;\n"
+              "  logic [31:0]            data;\n"
+              "  some_really_long_type_t thing;\n"
+              "endmodule\n");
+  }
+
+  const char input_unpacked[] =
+      "module m;\n"
+      "logic scoreboard_query_ready [OOO_INT_DISPATCH_QUERY_COUNT];\n"
+      "int_phys_reg_idx_t scoreboard_query_tag "
+      "[OOO_INT_DISPATCH_QUERY_COUNT];\n"
+      "\n"
+      "int_prf_read_request_t scheduled_prf_read_request "
+      "[OOO_INT_PRF_READ_PORT_COUNT];\n"
+      "int_prf_read_request_t prf_read_request [OOO_INT_PRF_READ_PORT_COUNT];\n"
+      "xlen_t prf_read_value [OOO_INT_PRF_READ_PORT_COUNT];\n"
+      "int_phys_reg_allocation_t prf_allocation [OOO_RENAME_WIDTH];\n"
+      "endmodule\n";
+
+  {
+    // Unpacked attach-to-name + packed attach-to-type:
+    FormatStyle style;
+    style.column_limit = 120;
+    style.indentation_spaces = 2;
+    style.module_net_variable_alignment = AlignmentPolicy::kAlign;
+    style.module_net_variable_packed_dimensions =
+        PackedDimensionsPlacement::kAttachToType;
+    style.module_net_variable_unpacked_dimensions =
+        UnpackedDimensionsPlacement::kAttachToName;
+
+    std::ostringstream stream;
+    EXPECT_OK(FormatVerilog(input_unpacked, "<filename>", style, stream));
+    EXPECT_EQ(stream.str(),
+              "module m;\n"
+              "  logic                     "
+              "scoreboard_query_ready[OOO_INT_DISPATCH_QUERY_COUNT];\n"
+              "  int_phys_reg_idx_t        "
+              "scoreboard_query_tag[OOO_INT_DISPATCH_QUERY_COUNT];\n"
+              "\n"
+              "  int_prf_read_request_t    "
+              "scheduled_prf_read_request[OOO_INT_PRF_READ_PORT_COUNT];\n"
+              "  int_prf_read_request_t    "
+              "prf_read_request[OOO_INT_PRF_READ_PORT_COUNT];\n"
+              "  xlen_t                    "
+              "prf_read_value[OOO_INT_PRF_READ_PORT_COUNT];\n"
+              "  int_phys_reg_allocation_t prf_allocation[OOO_RENAME_WIDTH];\n"
+              "endmodule\n");
+  }
+}
+
+TEST(FormatterEndToEndTest, CombinedAcceptanceTest) {
+  const char input[] =
+      "module top (\n"
+      "input logic clk,\n"
+      "input logic rst_n,\n"
+      "\n"
+      "// Ports\n"
+      "input logic [DATA_WIDTH-1:0] rx_data,\n"
+      "output logic [DATA_WIDTH-1:0] tx_data,\n"
+      "input my_pkg::header_t rx_header [DEPTH]\n"
+      ");\n"
+      "logic [31:0] internal_data;\n"
+      "long_type_name_t internal_state;\n"
+      "my_pkg::status_t status_array [PORTS];\n"
+      "\n"
+      "submodule u_sub (\n"
+      ".clk(clk),\n"
+      ".very_long_named_port(internal_data)\n"
+      ");\n"
+      "endmodule\n";
+
+  FormatStyle style;
+  style.column_limit = 120;
+  style.indentation_spaces = 2;
+  style.port_declarations_alignment = AlignmentPolicy::kAlign;
+  style.port_declarations_indentation = IndentationStyle::kIndent;
+  style.port_declarations_group_boundary = AlignmentGroupBoundary::kNone;
+  style.port_declarations_packed_dimensions =
+      PackedDimensionsPlacement::kAttachToType;
+  style.port_declarations_unpacked_dimensions =
+      UnpackedDimensionsPlacement::kAttachToName;
+
+  style.module_net_variable_alignment = AlignmentPolicy::kAlign;
+  style.module_net_variable_packed_dimensions =
+      PackedDimensionsPlacement::kAttachToType;
+  style.module_net_variable_unpacked_dimensions =
+      UnpackedDimensionsPlacement::kAttachToName;
+
+  style.named_port_alignment = AlignmentPolicy::kAlign;
+  style.named_port_indentation = IndentationStyle::kIndent;
+  style.named_port_minimum_spacing = 1;
+
+  std::ostringstream stream;
+  EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+  EXPECT_EQ(stream.str(),
+            "module top (\n"
+            "  input  logic                  clk,\n"
+            "  input  logic                  rst_n,\n"
+            "\n"
+            "  // Ports\n"
+            "  input  logic [DATA_WIDTH-1:0] rx_data,\n"
+            "  output logic [DATA_WIDTH-1:0] tx_data,\n"
+            "  input  my_pkg::header_t       rx_header[DEPTH]\n"
+            ");\n"
+            "  logic [31:0]     internal_data;\n"
+            "  long_type_name_t internal_state;\n"
+            "  my_pkg::status_t status_array[PORTS];\n"
+            "\n"
+            "  submodule u_sub (\n"
+            "    .clk                  (clk),\n"
+            "    .very_long_named_port (internal_data)\n"
+            "  );\n"
+            "endmodule\n");
+}
+
 }  // namespace
 }  // namespace formatter
 }  // namespace verilog

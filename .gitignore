@@ -14,3 +14,4 @@ verible_clang-tidy.*
 .envrc
 .direnv
 user.bazelrc
+/.bazel-cache/

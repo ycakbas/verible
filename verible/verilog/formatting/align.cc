@@ -327,7 +327,11 @@ class ActualNamedParameterColumnSchemaScanner
       case NodeEnum::kParenGroup:
         // Second column starts at the open parenthesis.
         if (Context().DirectParentIs(NodeEnum::kParamByName)) {
-          ReserveNewColumn(node, FlushLeft);
+          ReserveNewColumn(
+              node, style_.named_parameter_minimum_spacing > 0
+                        ? verible::AlignmentColumnProperties(
+                              true, style_.named_parameter_minimum_spacing)
+                        : FlushLeft);
         }
         break;
       default:
@@ -359,7 +363,11 @@ class ActualNamedPortColumnSchemaScanner : public VerilogColumnSchemaScanner {
       case NodeEnum::kParenGroup:
         // Second column starts at the open parenthesis.
         if (Context().DirectParentIs(NodeEnum::kActualNamedPort)) {
-          ReserveNewColumn(node, FlushLeft);
+          ReserveNewColumn(node,
+                           style_.named_port_minimum_spacing > 0
+                               ? verible::AlignmentColumnProperties(
+                                     true, style_.named_port_minimum_spacing)
+                               : FlushLeft);
         }
         break;
       default:
@@ -384,6 +392,11 @@ class PortDeclarationColumnSchemaScanner : public VerilogColumnSchemaScanner {
             << TreePathFormatter(Path());
     switch (tag) {
       case NodeEnum::kPackedDimensions: {
+        if (style_.port_declarations_packed_dimensions ==
+            PackedDimensionsPlacement::kAttachToType) {
+          // Packed dimensions remain attached to data type; no separate column.
+          return;
+        }
         // Kludge: kPackedDimensions can appear in paths
         //   [1,0,3] inside a kNetDeclaration and at
         //   [1,0,0,3] inside a kDataDeclaration,
@@ -410,6 +423,11 @@ class PortDeclarationColumnSchemaScanner : public VerilogColumnSchemaScanner {
         return;
       }
       case NodeEnum::kUnpackedDimensions: {
+        if (style_.port_declarations_unpacked_dimensions ==
+            UnpackedDimensionsPlacement::kAttachToName) {
+          // Unpacked dimensions remain attached to name; no separate column.
+          return;
+        }
         current_dimensions_group_ = ReserveNewColumn(node, FlushLeft);
         TreeContextPathVisitor::Visit(node);
         current_dimensions_group_ = nullptr;
@@ -797,6 +815,11 @@ class DataDeclarationColumnSchemaScanner : public VerilogColumnSchemaScanner {
         break;
       }
       case NodeEnum::kPackedDimensions: {
+        if (style_.module_net_variable_packed_dimensions ==
+            PackedDimensionsPlacement::kAttachToType) {
+          // Packed dimensions remain attached to data type; no separate column.
+          return;
+        }
         // Kludge: kPackedDimensions can appear in paths:
         //   [1,0,3] inside a kNetDeclaration and at
         //   [1,0,0,3] inside a kDataDeclaration,
@@ -810,6 +833,12 @@ class DataDeclarationColumnSchemaScanner : public VerilogColumnSchemaScanner {
         break;
       }
       case NodeEnum::kDeclarationDimensions: {
+        if (style_.module_net_variable_unpacked_dimensions ==
+            UnpackedDimensionsPlacement::kAttachToName) {
+          // Unpacked dimensions remain attached to variable name; no separate
+          // column.
+          return;
+        }
         if (current_path_ == SyntaxTreePath{1, 0, 3, 0}) {
           SyntaxTreePath new_path{1, 0, 3};
           const ValueSaver<SyntaxTreePath> path_saver(&current_path_, new_path);
@@ -818,7 +847,25 @@ class DataDeclarationColumnSchemaScanner : public VerilogColumnSchemaScanner {
         }
         break;
       }
+      case NodeEnum::kUnpackedDimensions: {
+        if (style_.module_net_variable_unpacked_dimensions ==
+            UnpackedDimensionsPlacement::kAttachToName) {
+          // Unpacked dimensions remain attached to variable name; no separate
+          // column.
+          return;
+        }
+        break;
+      }
       case NodeEnum::kDimensionScalar: {
+        if ((Context().IsInside(NodeEnum::kPackedDimensions) &&
+             style_.module_net_variable_packed_dimensions ==
+                 PackedDimensionsPlacement::kAttachToType) ||
+            ((Context().IsInside(NodeEnum::kDeclarationDimensions) ||
+              Context().IsInside(NodeEnum::kUnpackedDimensions)) &&
+             style_.module_net_variable_unpacked_dimensions ==
+                 UnpackedDimensionsPlacement::kAttachToName)) {
+          return;
+        }
         CHECK_EQ(node.size(), 3);
         auto *column = ABSL_DIE_IF_NULL(ReserveNewColumn(node, FlushLeft));
 
@@ -828,6 +875,15 @@ class DataDeclarationColumnSchemaScanner : public VerilogColumnSchemaScanner {
         return;
       }
       case NodeEnum::kDimensionRange: {
+        if ((Context().IsInside(NodeEnum::kPackedDimensions) &&
+             style_.module_net_variable_packed_dimensions ==
+                 PackedDimensionsPlacement::kAttachToType) ||
+            ((Context().IsInside(NodeEnum::kDeclarationDimensions) ||
+              Context().IsInside(NodeEnum::kUnpackedDimensions)) &&
+             style_.module_net_variable_unpacked_dimensions ==
+                 UnpackedDimensionsPlacement::kAttachToName)) {
+          return;
+        }
         CHECK_EQ(node.size(), 5);
         auto *column = ABSL_DIE_IF_NULL(ReserveNewColumn(node, FlushRight));
 
@@ -846,6 +902,15 @@ class DataDeclarationColumnSchemaScanner : public VerilogColumnSchemaScanner {
       }
       case NodeEnum::kDimensionSlice:
       case NodeEnum::kDimensionAssociativeType: {
+        if ((Context().IsInside(NodeEnum::kPackedDimensions) &&
+             style_.module_net_variable_packed_dimensions ==
+                 PackedDimensionsPlacement::kAttachToType) ||
+            ((Context().IsInside(NodeEnum::kDeclarationDimensions) ||
+              Context().IsInside(NodeEnum::kUnpackedDimensions)) &&
+             style_.module_net_variable_unpacked_dimensions ==
+                 UnpackedDimensionsPlacement::kAttachToName)) {
+          return;
+        }
         // All of these cases cover packed and unpacked dimensions
         ReserveNewColumn(node, FlushLeft);
         break;
@@ -1553,11 +1618,63 @@ using AlignSyntaxGroupsFunction =
     std::function<std::vector<AlignablePartitionGroup>(
         const TokenPartitionRange &range, const FormatStyle &style)>;
 
+static std::vector<TaggedTokenPartitionRange>
+GetConsecutivePortDeclarationGroups(const TokenPartitionRange &partitions,
+                                    AlignmentGroupBoundary boundary) {
+  VLOG(2) << __FUNCTION__;
+  return GetPartitionAlignmentSubranges(
+      partitions,
+      [boundary](const TokenPartitionTree &partition)
+          -> AlignedPartitionClassification {
+        const Symbol *origin = partition.Value().Origin();
+        if (origin == nullptr) {
+          if (SeparatorCommentsBreakGroups(boundary) &&
+              IsSeparatorComment(partition)) {
+            return {AlignmentGroupAction::kNoMatch};
+          }
+          return {AlignmentGroupAction::kIgnore};
+        }
+        return AlignClassify(AlignmentGroupAction::kMatch,
+                             AlignableSyntaxSubtype::kPortDeclaration);
+      });
+}
+
+// Extracts alignable partition groups, optionally pre-splitting the range at
+// blank lines when the alignment_group_boundary style setting requires it.
+static std::vector<AlignablePartitionGroup>
+ExtractAlignablePartitionGroupsWithBoundary(
+    const std::function<std::vector<TaggedTokenPartitionRange>(
+        const TokenPartitionRange &)> &group_extractor,
+    const verible::IgnoreAlignmentRowPredicate &ignore_group_predicate,
+    const TokenPartitionRange &full_range, AlignmentGroupBoundary boundary,
+    const FormatStyle &vstyle) {
+  if (!BlankLinesBreakGroups(boundary)) {
+    return ExtractAlignablePartitionGroups(
+        group_extractor, ignore_group_predicate, full_range, vstyle);
+  }
+  // Pre-split at blank lines, then apply grouping to each sub-range.
+  std::vector<AlignablePartitionGroup> all_groups;
+  const auto sub_ranges =
+      verible::GetSubpartitionsBetweenBlankLines(full_range);
+  for (const auto &sub_range : sub_ranges) {
+    auto groups = ExtractAlignablePartitionGroups(
+        group_extractor, ignore_group_predicate, sub_range, vstyle);
+    for (const auto &group : groups) {
+      all_groups.push_back(group);
+    }
+  }
+  return all_groups;
+}
+
 static std::vector<AlignablePartitionGroup> AlignPortDeclarations(
     const TokenPartitionRange &full_range, const FormatStyle &vstyle) {
-  return ExtractAlignablePartitionGroups(
-      PartitionBetweenBlankLines(AlignableSyntaxSubtype::kPortDeclaration),
-      &IgnoreWithinPortDeclarationPartitionGroup, full_range, vstyle);
+  auto group_extractor = [&vstyle](const TokenPartitionRange &range) {
+    return GetConsecutivePortDeclarationGroups(
+        range, vstyle.port_declarations_group_boundary);
+  };
+  return ExtractAlignablePartitionGroupsWithBoundary(
+      group_extractor, &IgnoreWithinPortDeclarationPartitionGroup, full_range,
+      vstyle.port_declarations_group_boundary, vstyle);
 }
 
 static std::vector<AlignablePartitionGroup> AlignStructUnionMembers(
@@ -1582,32 +1699,6 @@ static std::vector<AlignablePartitionGroup> AlignActualNamedPorts(
       &IgnoreWithinActualNamedPortPartitionGroup, full_range, vstyle);
 }
 
-// Extracts alignable partition groups, optionally pre-splitting the range at
-// blank lines when the alignment_group_boundary style setting requires it.
-static std::vector<AlignablePartitionGroup>
-ExtractAlignablePartitionGroupsWithBoundary(
-    const std::function<std::vector<TaggedTokenPartitionRange>(
-        const TokenPartitionRange &)> &group_extractor,
-    const verible::IgnoreAlignmentRowPredicate &ignore_group_predicate,
-    const TokenPartitionRange &full_range, const FormatStyle &vstyle) {
-  if (!BlankLinesBreakGroups(vstyle.alignment_group_boundary)) {
-    return ExtractAlignablePartitionGroups(
-        group_extractor, ignore_group_predicate, full_range, vstyle);
-  }
-  // Pre-split at blank lines, then apply grouping to each sub-range.
-  std::vector<AlignablePartitionGroup> all_groups;
-  const auto sub_ranges =
-      verible::GetSubpartitionsBetweenBlankLines(full_range);
-  for (const auto &sub_range : sub_ranges) {
-    auto groups = ExtractAlignablePartitionGroups(
-        group_extractor, ignore_group_predicate, sub_range, vstyle);
-    for (const auto &group : groups) {
-      all_groups.push_back(group);
-    }
-  }
-  return all_groups;
-}
-
 static std::vector<AlignablePartitionGroup> AlignModuleItems(
     const TokenPartitionRange &full_range, const FormatStyle &vstyle) {
   // Applies to module/interface, generate, and package item lists.
@@ -1619,7 +1710,7 @@ static std::vector<AlignablePartitionGroup> AlignModuleItems(
   };
   return ExtractAlignablePartitionGroupsWithBoundary(
       group_extractor, &IgnoreCommentsAndPreprocessingDirectives, full_range,
-      vstyle);
+      vstyle.alignment_group_boundary, vstyle);
 }
 
 static std::vector<AlignablePartitionGroup> AlignClassItems(
@@ -1631,7 +1722,7 @@ static std::vector<AlignablePartitionGroup> AlignClassItems(
   };
   return ExtractAlignablePartitionGroupsWithBoundary(
       group_extractor, &IgnoreCommentsAndPreprocessingDirectives, full_range,
-      vstyle);
+      vstyle.alignment_group_boundary, vstyle);
 }
 
 static std::vector<AlignablePartitionGroup> AlignCaseItems(
@@ -1666,7 +1757,7 @@ static std::vector<AlignablePartitionGroup> AlignStatements(
   };
   return ExtractAlignablePartitionGroupsWithBoundary(
       group_extractor, &IgnoreCommentsAndPreprocessingDirectives, full_range,
-      vstyle);
+      vstyle.alignment_group_boundary, vstyle);
 }
 
 static std::vector<AlignablePartitionGroup> AlignDistItems(

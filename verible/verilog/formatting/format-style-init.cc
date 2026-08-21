@@ -29,6 +29,8 @@
 using verible::AlignmentPolicy;
 using verible::IndentationStyle;
 using verilog::formatter::AlignmentGroupBoundary;
+using verilog::formatter::PackedDimensionsPlacement;
+using verilog::formatter::UnpackedDimensionsPlacement;
 
 // AlignmentGroupBoundary flag support.
 namespace verilog {
@@ -61,6 +63,60 @@ bool AbslParseFlag(std::string_view text, AlignmentGroupBoundary *boundary,
 std::string AbslUnparseFlag(const AlignmentGroupBoundary &boundary) {
   std::ostringstream stream;
   stream << boundary;
+  return stream.str();
+}
+
+static const verible::EnumNameMap<PackedDimensionsPlacement> &
+PackedDimensionsPlacementNameMap() {
+  static const verible::EnumNameMap<PackedDimensionsPlacement>
+      kPackedDimensionsPlacementNameMap({
+          {"separate", PackedDimensionsPlacement::kSeparate},
+          {"attach-to-type", PackedDimensionsPlacement::kAttachToType},
+      });
+  return kPackedDimensionsPlacementNameMap;
+}
+
+std::ostream &operator<<(std::ostream &stream,
+                         PackedDimensionsPlacement placement) {
+  return PackedDimensionsPlacementNameMap().Unparse(placement, stream);
+}
+
+bool AbslParseFlag(std::string_view text, PackedDimensionsPlacement *placement,
+                   std::string *error) {
+  return PackedDimensionsPlacementNameMap().Parse(text, placement, error,
+                                                  "PackedDimensionsPlacement");
+}
+
+std::string AbslUnparseFlag(const PackedDimensionsPlacement &placement) {
+  std::ostringstream stream;
+  stream << placement;
+  return stream.str();
+}
+
+static const verible::EnumNameMap<UnpackedDimensionsPlacement> &
+UnpackedDimensionsPlacementNameMap() {
+  static const verible::EnumNameMap<UnpackedDimensionsPlacement>
+      kUnpackedDimensionsPlacementNameMap({
+          {"separate", UnpackedDimensionsPlacement::kSeparate},
+          {"attach-to-name", UnpackedDimensionsPlacement::kAttachToName},
+      });
+  return kUnpackedDimensionsPlacementNameMap;
+}
+
+std::ostream &operator<<(std::ostream &stream,
+                         UnpackedDimensionsPlacement placement) {
+  return UnpackedDimensionsPlacementNameMap().Unparse(placement, stream);
+}
+
+bool AbslParseFlag(std::string_view text,
+                   UnpackedDimensionsPlacement *placement, std::string *error) {
+  return UnpackedDimensionsPlacementNameMap().Parse(
+      text, placement, error, "UnpackedDimensionsPlacement");
+}
+
+std::string AbslUnparseFlag(const UnpackedDimensionsPlacement &placement) {
+  std::ostringstream stream;
+  stream << placement;
   return stream.str();
 }
 
@@ -157,6 +213,38 @@ ABSL_FLAG(bool, port_declarations_right_align_unpacked_dimensions, false,
           "If true, unpacked dimensions in contexts with enabled alignment are "
           "aligned to the right.");
 
+ABSL_FLAG(int, named_port_minimum_spacing, 0,
+          "Minimum spaces between port name and ( in aligned named ports.");
+ABSL_FLAG(int, named_parameter_minimum_spacing, 0,
+          "Minimum spaces between parameter name and ( in aligned named "
+          "parameters.");
+
+ABSL_FLAG(AlignmentGroupBoundary, port_declarations_group_boundary,
+          AlignmentGroupBoundary::kBlankLines,
+          "Control what breaks alignment groups for port declarations: "
+          "{none,blank-lines,separator-comments,"
+          "blank-lines-and-separator-comments}");
+
+ABSL_FLAG(PackedDimensionsPlacement, port_declarations_packed_dimensions,
+          PackedDimensionsPlacement::kSeparate,
+          "Control placement of packed dimensions in port declarations: "
+          "{separate,attach-to-type}");
+
+ABSL_FLAG(UnpackedDimensionsPlacement, port_declarations_unpacked_dimensions,
+          UnpackedDimensionsPlacement::kSeparate,
+          "Control placement of unpacked dimensions in port declarations: "
+          "{separate,attach-to-name}");
+
+ABSL_FLAG(PackedDimensionsPlacement, module_net_variable_packed_dimensions,
+          PackedDimensionsPlacement::kSeparate,
+          "Control placement of packed dimensions in net/variable "
+          "declarations: {separate,attach-to-type}");
+
+ABSL_FLAG(UnpackedDimensionsPlacement, module_net_variable_unpacked_dimensions,
+          UnpackedDimensionsPlacement::kSeparate,
+          "Control placement of unpacked dimensions in net/variable "
+          "declarations: {separate,attach-to-name}");
+
 // -- Deprecated flags. These were typos. Remove after 2022-01-01
 ABSL_RETIRED_FLAG(
     AlignmentPolicy, net_variable_alignment,  //
@@ -181,9 +269,13 @@ void InitializeFromFlags(FormatStyle *style) {
   STYLE_FROM_FLAG(struct_union_members_alignment);
   STYLE_FROM_FLAG(named_parameter_indentation);
   STYLE_FROM_FLAG(named_parameter_alignment);
+  STYLE_FROM_FLAG(named_parameter_minimum_spacing);
   STYLE_FROM_FLAG(named_port_indentation);
   STYLE_FROM_FLAG(named_port_alignment);
+  STYLE_FROM_FLAG(named_port_minimum_spacing);
   STYLE_FROM_FLAG(module_net_variable_alignment);
+  STYLE_FROM_FLAG(module_net_variable_packed_dimensions);
+  STYLE_FROM_FLAG(module_net_variable_unpacked_dimensions);
   STYLE_FROM_FLAG(assignment_statement_alignment);
   STYLE_FROM_FLAG(enum_assignment_statement_alignment);
   STYLE_FROM_FLAG(formal_parameters_indentation);
@@ -192,6 +284,9 @@ void InitializeFromFlags(FormatStyle *style) {
   STYLE_FROM_FLAG(class_member_variable_alignment);
   STYLE_FROM_FLAG(case_items_alignment);
   STYLE_FROM_FLAG(distribution_items_alignment);
+  STYLE_FROM_FLAG(port_declarations_group_boundary);
+  STYLE_FROM_FLAG(port_declarations_packed_dimensions);
+  STYLE_FROM_FLAG(port_declarations_unpacked_dimensions);
   STYLE_FROM_FLAG(port_declarations_right_align_packed_dimensions);
   STYLE_FROM_FLAG(port_declarations_right_align_unpacked_dimensions);
   STYLE_FROM_FLAG(try_wrap_long_lines);

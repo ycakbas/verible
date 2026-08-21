@@ -43,6 +43,32 @@ bool AbslParseFlag(std::string_view text, AlignmentGroupBoundary *boundary,
                    std::string *error);
 std::string AbslUnparseFlag(const AlignmentGroupBoundary &boundary);
 
+// Control placement of packed dimensions in declaration alignment.
+enum class PackedDimensionsPlacement {
+  // Packed dimensions are aligned in separate columns.
+  kSeparate,
+  // Packed dimensions are attached to the data type.
+  kAttachToType,
+};
+
+std::ostream &operator<<(std::ostream &, PackedDimensionsPlacement);
+bool AbslParseFlag(std::string_view text, PackedDimensionsPlacement *placement,
+                   std::string *error);
+std::string AbslUnparseFlag(const PackedDimensionsPlacement &placement);
+
+// Control placement of unpacked dimensions in declaration alignment.
+enum class UnpackedDimensionsPlacement {
+  // Unpacked dimensions are aligned in separate columns.
+  kSeparate,
+  // Unpacked dimensions are attached to the identifier/variable name.
+  kAttachToName,
+};
+
+std::ostream &operator<<(std::ostream &, UnpackedDimensionsPlacement);
+bool AbslParseFlag(std::string_view text,
+                   UnpackedDimensionsPlacement *placement, std::string *error);
+std::string AbslUnparseFlag(const UnpackedDimensionsPlacement &placement);
+
 // Style parameters that are specific to Verilog formatter
 struct FormatStyle : public verible::BasicFormatStyle {
   using AlignmentPolicy = verible::AlignmentPolicy;
@@ -76,6 +102,10 @@ struct FormatStyle : public verible::BasicFormatStyle {
   // For internal testing purposes, this is default to kAlign.
   AlignmentPolicy named_parameter_alignment = AlignmentPolicy::kAlign;
 
+  // Minimum spacing between parameter name and ( in aligned named parameter
+  // assignments.
+  int named_parameter_minimum_spacing = 0;
+
   // Control indentation amount for named port connections.
   IndentationStyle named_port_indentation = IndentationStyle::kWrap;
 
@@ -83,10 +113,22 @@ struct FormatStyle : public verible::BasicFormatStyle {
   // Internal tests assume these are forced to kAlign.
   AlignmentPolicy named_port_alignment = AlignmentPolicy::kAlign;
 
+  // Minimum spacing between port name and ( in aligned named port connections.
+  int named_port_minimum_spacing = 0;
+
   // Control how module-local net/variable declarations are formatted.
   // Applies in module, generate, interface, and package bodies.
   // Internal tests assume these are forced to kAlign.
   AlignmentPolicy module_net_variable_alignment = AlignmentPolicy::kAlign;
+
+  // Control placement of packed dimensions in module net/variable declarations.
+  PackedDimensionsPlacement module_net_variable_packed_dimensions =
+      PackedDimensionsPlacement::kSeparate;
+
+  // Control placement of unpacked dimensions in module net/variable
+  // declarations.
+  UnpackedDimensionsPlacement module_net_variable_unpacked_dimensions =
+      UnpackedDimensionsPlacement::kSeparate;
 
   // Control how various assignment statements should be aligned.
   // Applies in module, generate, interface, and package bodies.
@@ -126,6 +168,18 @@ struct FormatStyle : public verible::BasicFormatStyle {
   // Control how distribution items are formatted.
   // Internal tests assume these are forced to kAlign.
   AlignmentPolicy distribution_items_alignment = AlignmentPolicy::kAlign;
+
+  // Control what breaks alignment groups for port declarations.
+  AlignmentGroupBoundary port_declarations_group_boundary =
+      AlignmentGroupBoundary::kBlankLines;
+
+  // Control placement of packed dimensions in port declarations.
+  PackedDimensionsPlacement port_declarations_packed_dimensions =
+      PackedDimensionsPlacement::kSeparate;
+
+  // Control placement of unpacked dimensions in port declarations.
+  UnpackedDimensionsPlacement port_declarations_unpacked_dimensions =
+      UnpackedDimensionsPlacement::kSeparate;
 
   bool port_declarations_right_align_packed_dimensions = false;
   bool port_declarations_right_align_unpacked_dimensions = false;
