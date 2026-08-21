@@ -21236,11 +21236,45 @@ TEST(FormatterEndToEndTest, PortDeclarationsDimensionsTest) {
               "module foo (\n"
               "  input  logic [SOURCE_COUNT-1:0]     source_valid,\n"
               "  output logic [SOURCE_COUNT-1:0]     source_ready,\n"
-              "  input  commit_pkg::rob_completion_t "
-              "source_completion[SOURCE_COUNT]\n"
+              "  input  commit_pkg::rob_completion_t source_completion "
+              "[SOURCE_COUNT]\n"
               ");\n"
               "endmodule\n");
   }
+}
+
+TEST(FormatterEndToEndTest, PortDeclarationsMultipleUnpackedDimensionsTest) {
+  const char input[] =
+      "module m (\n"
+      "input foo_t foo [COUNT],\n"
+      "input longer_type_t long_name [A][B]\n"
+      ");\n"
+      "endmodule\n";
+
+  FormatStyle style;
+  style.column_limit = 120;
+  style.indentation_spaces = 2;
+  style.port_declarations_alignment = AlignmentPolicy::kAlign;
+  style.port_declarations_indentation = IndentationStyle::kIndent;
+  style.port_declarations_packed_dimensions =
+      PackedDimensionsPlacement::kAttachToType;
+  style.port_declarations_unpacked_dimensions =
+      UnpackedDimensionsPlacement::kAttachToName;
+
+  std::ostringstream stream;
+  EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+  const std::string formatted = stream.str();
+  EXPECT_EQ(formatted,
+            "module m (\n"
+            "  input foo_t         foo [COUNT],\n"
+            "  input longer_type_t long_name [A][B]\n"
+            ");\n"
+            "endmodule\n");
+
+  // Verify idempotence
+  std::ostringstream stream2;
+  EXPECT_OK(FormatVerilog(formatted, "<filename>", style, stream2));
+  EXPECT_EQ(stream2.str(), formatted);
 }
 
 TEST(FormatterEndToEndTest, ModuleNetVariableDimensionsTest) {
@@ -21294,22 +21328,59 @@ TEST(FormatterEndToEndTest, ModuleNetVariableDimensionsTest) {
 
     std::ostringstream stream;
     EXPECT_OK(FormatVerilog(input_unpacked, "<filename>", style, stream));
-    EXPECT_EQ(stream.str(),
+    const std::string formatted = stream.str();
+    EXPECT_EQ(formatted,
               "module m;\n"
               "  logic                     "
-              "scoreboard_query_ready[OOO_INT_DISPATCH_QUERY_COUNT];\n"
+              "scoreboard_query_ready [OOO_INT_DISPATCH_QUERY_COUNT];\n"
               "  int_phys_reg_idx_t        "
-              "scoreboard_query_tag[OOO_INT_DISPATCH_QUERY_COUNT];\n"
+              "scoreboard_query_tag [OOO_INT_DISPATCH_QUERY_COUNT];\n"
               "\n"
               "  int_prf_read_request_t    "
-              "scheduled_prf_read_request[OOO_INT_PRF_READ_PORT_COUNT];\n"
+              "scheduled_prf_read_request [OOO_INT_PRF_READ_PORT_COUNT];\n"
               "  int_prf_read_request_t    "
-              "prf_read_request[OOO_INT_PRF_READ_PORT_COUNT];\n"
+              "prf_read_request [OOO_INT_PRF_READ_PORT_COUNT];\n"
               "  xlen_t                    "
-              "prf_read_value[OOO_INT_PRF_READ_PORT_COUNT];\n"
-              "  int_phys_reg_allocation_t prf_allocation[OOO_RENAME_WIDTH];\n"
+              "prf_read_value [OOO_INT_PRF_READ_PORT_COUNT];\n"
+              "  int_phys_reg_allocation_t prf_allocation [OOO_RENAME_WIDTH];\n"
               "endmodule\n");
+
+    // Verify idempotence
+    std::ostringstream stream2;
+    EXPECT_OK(FormatVerilog(formatted, "<filename>", style, stream2));
+    EXPECT_EQ(stream2.str(), formatted);
   }
+}
+
+TEST(FormatterEndToEndTest, ModuleNetVariableMultipleUnpackedDimensionsTest) {
+  const char input[] =
+      "module m;\n"
+      "foo_t foo [A][B];\n"
+      "bar_type_t long_name [X][Y][Z];\n"
+      "endmodule\n";
+
+  FormatStyle style;
+  style.column_limit = 120;
+  style.indentation_spaces = 2;
+  style.module_net_variable_alignment = AlignmentPolicy::kAlign;
+  style.module_net_variable_packed_dimensions =
+      PackedDimensionsPlacement::kAttachToType;
+  style.module_net_variable_unpacked_dimensions =
+      UnpackedDimensionsPlacement::kAttachToName;
+
+  std::ostringstream stream;
+  EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
+  const std::string formatted = stream.str();
+  EXPECT_EQ(formatted,
+            "module m;\n"
+            "  foo_t      foo [A][B];\n"
+            "  bar_type_t long_name [X][Y][Z];\n"
+            "endmodule\n");
+
+  // Verify idempotence
+  std::ostringstream stream2;
+  EXPECT_OK(FormatVerilog(formatted, "<filename>", style, stream2));
+  EXPECT_EQ(stream2.str(), formatted);
 }
 
 TEST(FormatterEndToEndTest, CombinedAcceptanceTest) {
@@ -21356,7 +21427,8 @@ TEST(FormatterEndToEndTest, CombinedAcceptanceTest) {
 
   std::ostringstream stream;
   EXPECT_OK(FormatVerilog(input, "<filename>", style, stream));
-  EXPECT_EQ(stream.str(),
+  const std::string formatted = stream.str();
+  EXPECT_EQ(formatted,
             "module top (\n"
             "  input  logic                  clk,\n"
             "  input  logic                  rst_n,\n"
@@ -21364,17 +21436,22 @@ TEST(FormatterEndToEndTest, CombinedAcceptanceTest) {
             "  // Ports\n"
             "  input  logic [DATA_WIDTH-1:0] rx_data,\n"
             "  output logic [DATA_WIDTH-1:0] tx_data,\n"
-            "  input  my_pkg::header_t       rx_header[DEPTH]\n"
+            "  input  my_pkg::header_t       rx_header [DEPTH]\n"
             ");\n"
             "  logic [31:0]     internal_data;\n"
             "  long_type_name_t internal_state;\n"
-            "  my_pkg::status_t status_array[PORTS];\n"
+            "  my_pkg::status_t status_array [PORTS];\n"
             "\n"
             "  submodule u_sub (\n"
             "    .clk                  (clk),\n"
             "    .very_long_named_port (internal_data)\n"
             "  );\n"
             "endmodule\n");
+
+  // Verify idempotence
+  std::ostringstream stream2;
+  EXPECT_OK(FormatVerilog(formatted, "<filename>", style, stream2));
+  EXPECT_EQ(stream2.str(), formatted);
 }
 
 }  // namespace

@@ -372,6 +372,8 @@ static WithReason<int> SpacesRequiredBetween(
   }
 
   // Handle padding around packed array dimensions like "type [N] id;"
+  // and unpacked array dimensions like "type id [N];" when attach-to-name is
+  // enabled.
   if ((left.format_token_enum == FormatTokenType::keyword ||
        left.format_token_enum == FormatTokenType::identifier) &&
       right.TokenEnum() == '[') {
@@ -380,6 +382,21 @@ static WithReason<int> SpacesRequiredBetween(
       // "type [packed...]" (space between type and packed dimensions)
       // avoid touching any expressions inside the packed dimensions
       return {1, "spacing before [packed dimensions] of declarations"};
+    }
+    if (right_context.IsInsideFirst(
+            {NodeEnum::kUnpackedDimensions, NodeEnum::kDeclarationDimensions},
+            {NodeEnum::kExpression})) {
+      if ((style.port_declarations_unpacked_dimensions ==
+               UnpackedDimensionsPlacement::kAttachToName &&
+           (right_context.IsInside(NodeEnum::kPortDeclaration) ||
+            right_context.IsInside(NodeEnum::kPortItem))) ||
+          (style.module_net_variable_unpacked_dimensions ==
+               UnpackedDimensionsPlacement::kAttachToName &&
+           (right_context.IsInside(NodeEnum::kDataDeclaration) ||
+            right_context.IsInside(NodeEnum::kNetDeclaration)))) {
+        return {1,
+                "spacing before [unpacked dimensions] when attached to name"};
+      }
     }
     // All other contexts, such as "a[i]" indices, no space.
     return {0, "All other cases of \".*[\", no space"};
